@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<!-- QA automatizado: se sirve junto a index.html y ejecuta verificaciones
+     en un iframe del tamaño exacto del viewport. Uso:
+     qa.html           → batería completa (overflow, táctiles, 5 partidas)
+     qa.html#shot-X    → prepara un estado para captura (intro|juego|feedback-ok|feedback-mal|resultado) -->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>body{margin:0}pre{font:11px monospace;white-space:pre-wrap;padding:8px}</style>
+</head>
+<body>
+<pre id="salida">iniciando…</pre>
+<iframe id="marco" style="border:0"></iframe>
+<script>
+'use strict';
+const SALIDA = [];
+const log = (s) => { SALIDA.push(s); document.getElementById('salida').textContent = SALIDA.join('\n'); };
+const fallos = [];
+
+const afirmar = (cond, msg) => {
+  log((cond ? ' ✓ ' : ' ✗ ') + msg);
+  if (!cond) fallos.push(msg);
+};
+
+const marco = document.getElementById('marco');
+const ESTADO_HASH = { 'intro': '', 'juego': '#jugar', 'feedback-ok': '#feedback-ok', 'feedback-mal': '#feedback-mal', 'resultado': '#resultado' };
+const params = (location.hash.match(/shot-([\w-]+)/) || [])[1];
+const ALTO_FORZADO = location.hash.includes('h844') ? 844 : null;
+
+function ajustarMarco() {
+  if (params) {
+    marco.style.width = '390px';
+    marco.style.height = '844px';
+    return;
+  }
+  marco.style.width = window.innerWidth + 'px';
+  marco.style.height = (ALTO_FORZADO || window.innerHeight) + 'px';
+}
+ajustarMarco();
+
+marco.src = params ? '../index.html' + ESTADO_HASH[params] : '../index.html';
+
+function doc() { return marco.contentDocument; }
+function win() { return marco.contentWindow; }
+
+function sinOverflowHorizontal() {
+  const d = doc();
+  return d.documentElement.scrollWidth <= marco.clientWidth;
+}
+function altoDocumento() { return doc().documentElement.scrollHeight; }
+function altoVisible() { return ALTO_FORZADO || window.innerHeight; }
+
+function estadoVisible(nombre) {
+  return !doc().getElementById('pantalla-' + nombre).classList.contains('oculta');
+}
+
+window.onerror = (msg) => { log('ERROR JS: ' + msg); log('FIN-QA'); };
+
+function iniciarBateria() {
+  try {
+    if (params) {
+      // Modo captura: iframe fijo 390×844 sobre fondo blanco (recorte exacto)
+      document.body.style.cssText = 'margin:0;background:#fff';
+      document.getElementById('salida').style.display = 'none';
+      ajustarMarco();
+      log('CAPTURA estado=' + params);
+      log('overflowHorizontal=' + !sinOverflowHorizontal() + ' altoDoc=' + altoDocumento() + ' viewport=' + altoVisible());
+      log('FIN-CAPTURA');
+      return;
+    }
+
+    /* ═══════ BATERÍA COMPLETA ═══════ */
+    const d = doc(), w = win();
+
+    // Pantalla inicial
+    afirmar(estadoVisible('inicio'), 'arranca en la pantalla de inicio');
+    afirmar(sinOverflowHorizontal(), 'inicio: sin overflow horizontal');
+    afirmar(d.getElementById('btn-comenzar').getBoundingClientRect().height >= 44, 'botón comenzar ≥ 44px');
+
+    // Iniciar partida
+    d.getElementById('btn-comenzar').click();
+    afirmar(estadoVisible('juego'), 'al comenzar se muestra la pantalla de juego');
+    afirmar(w.estado.rondas.length === 8, 'la partida tiene 8 retos (obtenido ' + w.estado.rondas.length + ')');
+    afirmar(d.querySelectorAll('.opcion').length === 3, 'se muestran 3 opciones');
+    afirmar(sinOverflowHorizontal(), 'ronda 1: sin overflow horizontal');
+    log('  altoDocumento(ronda1)=' + altoDocumento() + ' (viewport ' + window.innerHeight + ')');
+
+    // Botones táctiles
+    const alturas = Array.from(d.querySelectorAll('.opcion')).map(b => b.getBoundingClientRect().height);
+    afirmar(alturas.every(h => h >= 44), 'todas las opciones ≥ 44px (' + alturas.map(h => Math.round(h)).join('/') + ')');
+
+    // Fórmulas no desbordan su contenedor
+    let fDesbordadas = 0;
+    d.querySelectorAll('.opcion, .pregunta, .chip, .f').forEach(el => {
+      if (el.scrollWidth > el.clientWidth + 1) fDesbordadas++;
+    });
+    afirmar(fDesbordadas === 0, 'ninguna fórmula/texto desborda su contenedor (' + fDesbordadas + ')');
+
+    // Responder correcto → feedback
+    const btnOk = Array.from(d.querySelectorAll('.opcion')).find(b => b._ok);
+    btnOk.click();
+    afirmar(!d.getElementById('feedback').hidden, 'aparece feedback al responder');
+    afirmar(d.getElementById('feedback').classList.contains('acierto'), 'feedback marcado como acierto');
+    afirmar(d.getElementById('feedback-texto').textContent.length > 10, 'feedback con texto explicativo');
+    afirmar(d.querySelectorAll('.progreso-dot.ok').length === 1, 'punto de progreso verde');
+    afirmar(d.getElementById('almacen-contador').textContent === '1', 'almacén suma una caja');
+    const fbBox = d.getElementById('feedback').getBoundingClientRect();
+    afirmar(fbBox.bottom <= altoVisible(), 'feedback visible sin scroll (bottom=' + Math.round(fbBox.bottom) + ')');
+
+    // Responder mal → muestra la correcta
+    d.getElementById('btn-siguiente').click();
+    const btnMal = Array.from(d.querySelectorAll('.opcion')).find(b => !b._ok);
+    btnMal.click();
+    afirmar(d.getElementById('feedback').classList.contains('fallo'), 'feedback marcado como fallo');
+    afirmar(d.querySelectorAll('.opcion.correcta').length === 1, 'se revela la opción correcta al fallar');
+    afirmar(d.querySelectorAll('.progreso-dot.mal').length === 1, 'punto de progreso rojo');
+    afirmar(w.estado.aciertos === 1, 'aciertos = 1 tras 2 rondas');
+
+    /* ---------- 5 partidas simuladas punta a punta ---------- */
+    for (let p = 1; p <= 5; p++) {
+      w.cambiarPantalla('inicio');
+      d.getElementById('btn-comenzar').click();
+      const rondas = w.estado.rondas.length;
+      const ids = new Set();
+      for (let i = 0; i < rondas; i++) {
+        ids.add(w.estado.rondas[i].id);
+        const bots = Array.from(d.querySelectorAll('.opcion'));
+        (Math.random() < 0.75 ? bots.find(b => b._ok) : bots.find(b => !b._ok)).click();
+        d.getElementById('btn-siguiente').click();
+      }
+      afirmar(estadoVisible('resultado'), 'partida ' + p + ': termina en pantalla de resultado');
+      afirmar(ids.size === rondas, 'partida ' + p + ': sin retos repetidos');
+      const t = d.getElementById('r-tiempo').textContent;
+      afirmar(/^\d+:\d\d$/.test(t), 'partida ' + p + ': tiempo formateado (' + t + ')');
+      afirmar(d.getElementById('r-aciertos').textContent.includes('/8'), 'partida ' + p + ': marcador X/8 (' + d.getElementById('r-aciertos').textContent + ')');
+      afirmar(w.estado.puntos >= w.estado.aciertos * 100, 'partida ' + p + ': puntos coherentes (' + w.estado.puntos + ' con ' + w.estado.aciertos + ' aciertos)');
+      afirmar(d.getElementById('resultado-titulo').textContent.length > 5, 'partida ' + p + ': título de resultado presente');
+      afirmar(d.getElementById('repaso-texto').textContent.length > 5 || w.estado.aciertos === rondas, 'partida ' + p + ': texto de repaso presente');
+
+      // Replay
+      d.getElementById('btn-repetir').click();
+      afirmar(estadoVisible('juego') && w.estado.indice === 0 && w.estado.puntos === 0, 'partida ' + p + ': replay reinicia marcador y rondas');
+      w.estado.rondas.forEach(() => {
+        const bots = Array.from(d.querySelectorAll('.opcion'));
+        bots.find(b => b._ok).click();
+        d.getElementById('btn-siguiente').click();
+      });
+      afirmar(estadoVisible('resultado'), 'partida ' + p + ': segunda vuelta completa');
+    }
+
+    // Muestreo: variedad entre partidas
+    const muestras = new Set();
+    for (let i = 0; i < 10; i++) { w.estado.rondas = w.muestrearPartida(); muestras.add(w.estado.rondas.map(r => r.id).join('|')); }
+    afirmar(muestras.size >= 5, 'aleatoriedad: 10 muestreos generan ≥5 secuencias distintas (' + muestras.size + ')');
+
+    // Audio: silenciar alterna y persiste
+    d.getElementById('btn-sonido').click();
+    afirmar(d.getElementById('btn-sonido').getAttribute('aria-pressed') === 'false', 'mute alterna aria-pressed');
+    d.getElementById('btn-sonido').click();
+    afirmar(d.getElementById('btn-sonido').getAttribute('aria-pressed') === 'true', 'unmute restaura');
+
+    // Volver al inicio
+    d.getElementById('btn-inicio').click();
+    afirmar(estadoVisible('inicio'), 'botón volver al inicio funciona');
+
+    log('');
+    log(fallos.length ? 'QA VISUAL: FAIL (' + fallos.length + ')' : 'QA VISUAL: PASS');
+    log('FIN-QA');
+  } catch (e) {
+    log('EXCEPCIÓN: ' + e.message);
+    log('FIN-QA');
+  }
+}
+
+marco.addEventListener('load', iniciarBateria);
+</script>
+</body>
+</html>
