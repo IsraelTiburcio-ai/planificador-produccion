@@ -22,13 +22,14 @@
    ============================================================ */
 'use strict';
 
-/* Orden FIJO de estaciones de la línea de producción */
+/* Orden FIJO de estaciones de la línea de producción
+   (orden de lectura del cuadro, pág. 37 — redacción literal) */
 window.ESTACIONES = [
   { car: 'transformacion', corto: 'Transformación', nombre: 'Transformación de productos' },
-  { car: 'restricciones',  corto: 'Restricciones', nombre: 'Se manejan dos restricciones (materia prima y producto)' },
+  { car: 'restricciones',  corto: 'Materia prima y producto', nombre: 'Se manejan dos restricciones (materia prima y producto)' },
   { car: 'objetivo',       corto: 'Función objetivo', nombre: 'Función objetivo maximizada' },
-  { car: 'proceso',        corto: 'Proceso de transformación', nombre: 'La restricción establece el proceso de transformación' },
-  { car: 'planeacion',     corto: 'Caso particular', nombre: 'Caso particular de planeación de producción' }
+  { car: 'planeacion',     corto: 'Caso particular', nombre: 'Caso particular de planeación de producción' },
+  { car: 'proceso',        corto: 'Proceso de transformación', nombre: 'Restricciones: establecer el proceso de transformación' }
 ];
 
 window.BANCO = [
@@ -433,8 +434,8 @@ window.RETO_FINAL = {
     'Transformación de productos',
     'Se manejan dos restricciones (materia prima y producto)',
     'Función objetivo maximizada',
-    'La restricción establece el proceso de transformación',
-    'Caso particular de planeación de producción'
+    'Caso particular de planeación de producción',
+    'Restricciones: establecer el proceso de transformación'
   ],
   distractores: [
     'Minimizar el costo de inventario entre periodos',
