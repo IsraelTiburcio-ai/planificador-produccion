@@ -1,89 +1,85 @@
-# 🏭 Planificador de Producción — Equilibra la fábrica
+# 🏭 Planificador de Producción — Características del proceso de producción
 
-Microjuego educativo **mobile-first** (1–2 minutos por partida) para reforzar el tema
-**Planteamientos de Planeación de Producción** del **Gimnasio 2 · Optimización I**.
+Microjuego educativo **mobile-first** (45–90 segundos por partida) del **Gimnasio 2 · Optimización I**.
 
-El alumno administra una fábrica (Sailco / Manufacturera Acme) y, en lugar de resolver
-el modelo con Simplex, aprende a **PLANTEARLO**: variables de decisión, ecuaciones de
-balance de inventario, restricciones de capacidad, costos y función objetivo.
+**Objetivo académico (aclaración de la profesora):**
+> «Es para las características de planeación de producción. Es para que llenen las características.»
+
+El alumno recorre una línea de producción de **5 estaciones** —una por cada característica del
+cuadro manuscrito— y cierra con un **reto final de memoria**. Al terminar, debe poder llenar el
+cuadro cuyo centro es **“Planteamiento de Proceso de Producción”**.
 
 - **URL de producción:** https://israeltiburcio-ai.github.io/planificador-produccion/
-- **Tema:** Planteamientos de planeación de producción (P.L.)
-- **Duración por partida:** ≈ 60–100 segundos (8 retos)
+- **Tema:** Características del planteamiento de proceso de producción (P.L.)
+- **Duración por partida:** ≈ 45–90 s (5 estaciones + reto final)
 
 ## 📚 Fuente académica
 
-Archivo del curso: `GYM 2_251005_202412 (1).pdf` — *Gimnasio 2. Modelos de Programación Lineal*.
+`GYM 2_251005_202412 (1).pdf` — *Gimnasio 2. Modelos de Programación Lineal*.
 
-- **Páginas 37–38 (problemas 42 y 43):**
-  - **Sailco (42):** producción de botes de vela por trimestre. Demanda 40 / 60 / 75 / 25,
-    inventario inicial 10, capacidad regular **xⱼ ≤ 40** a **$400**/bote, tiempo extra **yⱼ** a
-    **$450**/bote, almacenamiento **$20**/bote al final del trimestre. Modelo de clase:
-    `min Z = 400(x₁+x₂+x₃+x₄) + 450(y₁+y₂+y₃+y₄) + 20(r₁+r₂+r₃)`, con balances
-    `x₁+y₁+10 = 40+r₁`, `r₁+x₂+y₂ = 60+r₂`, `r₂+x₃+y₃ = 75+r₃`, `r₃+x₄+y₄ = 25`.
-  - **Manufacturera Acme (Bayas Extra, 43):** ventanas por mes. Demandas
-    100 / 250 / 190 / 140 / 220 / 110, costos de producción $50/$45/$55/$48/$52/$50,
-    almacenamiento **$8**/ventana·mes. Balances: `x₁ = 100+r₁`, `x₂+r₁ = 250+r₂`, …
-- **Estructura central que enseña el juego:**
-  `inventario anterior + producción = demanda + inventario final`
+- **Página 37 (mapa manuscrito):** centro “Planteamiento de Proceso de Producción”, rodeado por:
+  1. **Transformación de productos**
+  2. **Se manejan dos restricciones** *(materia prima y producto)*
+  3. **Función objetivo maximizada**
+  4. **La restricción establece el proceso de transformación**
+  5. **Caso particular de planeación de producción**
+- **Mismo ejemplo impreso (prob. 41, ingeniero Dulce):** guarapo (4000 t semanales) → azúcar
+  morena (0.3 t/t) y melaza (0.1 t/t) → azúcar blanca (1 t morena → 0.8 t) → azúcar glas (0.95);
+  utilidades $150/$200/$230/$35 por tonelada; entrega mínima de 25 t semanales por clase.
+- **Sailco (prob. 42)** se conserva únicamente como el *caso particular* de planeación de producción.
 
 ## 🎮 Mecánica
 
-- **8 retos por partida** muestreados de un **banco de 23 retos** (varían entre partidas).
-- Progresión de dificultad:
-  - Rondas 1–2 · conceptos (variables, objetivo, costos)
-  - Rondas 3–5 · restricciones y balances (capacidad, ecuaciones de balance)
-  - Rondas 6–7 · interpretación matemática (leer el modelo de clase)
-  - Ronda final · mini caso integrador (elegir el planteamiento completo correcto)
-- Tipos de reto: identificar variables · balance de inventario · capacidad ·
-  función objetivo · inventario entre periodos · interpretación · detectar el
-  planteamiento incorrecto · caso integrador.
-- Puntuación: 100 pts por acierto + bonus de rapidez (≤10 s: +30, ≤18 s: +15)
-  + bonus de racha (hasta +50). Sin vidas: si fallas, se muestra la corrección y sigues.
-- Cada acierto apila una caja en el almacén de la escena.
+- **Línea de producción con 5 estaciones:** `MATERIA PRIMA → [1][2][3][4][5] → PRODUCTO TERMINADO`.
+  Cada estación corresponde a una característica; al acertar, la estación se activa, la caja de la
+  banda se transforma y el almacén suma cajas.
+- **Banco de 20 retos (4 por característica)**; cada partida muestrea **una pregunta por
+  característica** en el orden de la línea, así que siempre se cubren las 5 respuestas del cuadro
+  pero las preguntas varían entre partidas.
+- **Reto final de memoria (≤ 20 s):** aparecen 7–8 tarjetas; el alumno selecciona las **5
+  características** del cuadro entre distractores plausibles de P.L.
+- Puntuación: 100 pts por estación + rapidez (≤8 s: +30, ≤15 s: +15) + racha (hasta +50);
+  el reto final vale 200. Sin vidas: el fallo muestra la corrección y el proceso continúa.
+- La pantalla de resultado muestra **el cuadro completo listo para copiar** al de la profesora.
 
 ## 🛠️ Stack
 
-HTML + CSS + JavaScript vanilla (sin frameworks ni dependencias). Iconografía y
-escena de fábrica propias en SVG/CSS. Audio de efectos sintetizado con Web Audio API
-(con botón de silencio persistente).
+HTML + CSS + JavaScript vanilla (sin frameworks ni dependencias). Iconografía y escena de fábrica
+propias en SVG/CSS. Efectos de sonido sintetizados con Web Audio API (tap, correcto, incorrecto,
+avance de estación, fin) con botón de silencio persistente.
 
 ## 🚀 Cómo correrlo
-
-Opción 1 — abrir directo:
-
-```
-open index.html
-```
-
-Opción 2 — servidor local:
 
 ```
 python3 -m http.server 8000
 # → http://localhost:8000
 ```
 
-No hay paso de build. Despliegue automático a **GitHub Pages** vía **GitHub Actions**
-(`.github/workflows/pages.yml`) en cada push a `main`.
+o abrir `index.html` directamente. Sin paso de build. Despliegue automático a **GitHub Pages**
+vía **GitHub Actions** (`.github/workflows/pages.yml`) en cada push a `main`.
 
 ## 📁 Estructura
 
 ```
 index.html    → pantallas (inicio / juego / resultado) + sprite SVG
 styles.css    → diseño mobile-first 390×844, tema fábrica nocturna
-script.js     → lógica: muestreo de retos, racha, tiempo, audio, teclado
-data.js       → banco académico de 23 retos (separado de la lógica)
+script.js     → lógica: estaciones, reto final, racha, tiempo, audio, teclado
+data.js       → banco académico de 20 retos + reto final (separado de la lógica)
+qa/           → QA lógico (Node), batería funcional (Chrome) y QA académico (Python)
 .github/workflows/pages.yml → autodeploy a GitHub Pages
 ```
 
 ## ♿ Accesibilidad
 
 Contraste AA, botones ≥ 44 px, `:focus-visible`, `aria-label` / `aria-live`,
-atajos de teclado (1·2·3 para responder, Enter para continuar) y soporte de
-`prefers-reduced-motion`. El acierto/error no depende solo del color (iconos + texto).
+atajos de teclado (1·2·3 responder, Enter continuar) y soporte de `prefers-reduced-motion`.
+El acierto/error no depende solo del color (iconos + texto + estados con borde).
 
 ## ✅ QA
 
-Probado en Chrome (viewport 390×844 y escritorio 1440×900): sin overflow horizontal,
-fórmulas envueltas, opciones grandes táctiles, aleatoriedad verificada por simulación
-de partidas y revisión académica contra las páginas 37–38 del PDF del Gimnasio 2.
+- `qa/qa-logic.js` (Node): validez del banco, 4 retos por característica, fidelidad de redacción
+  al mapa, barajado uniforme, 5 partidas simuladas con duración estimada.
+- `qa/qa.html` (Chrome headless): batería funcional con iframe exacto de 390×844 y 1440×900:
+  overflow, táctiles, reto final, replay, mute.
+- `qa/qa-academico.py`: verifica que la redacción del juego coincide con las 5 cajas manuscritas
+  de la pág. 37 y que la mecánica anterior (balances, costos, min Z) no domina la partida.

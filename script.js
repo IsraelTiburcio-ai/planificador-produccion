@@ -1,6 +1,8 @@
 /* ============================================================
-   PLANIFICADOR DE PRODUCCIÓN — Lógica del juego
-   Enter → entender → jugar → terminar → volver a jugar
+   PLANIFICADOR DE PRODUCCIÓN — Lógica del juego (CORREGIDO)
+   Recorre el proceso de producción y descubre sus características:
+   5 estaciones (una por característica del cuadro de la pág. 37)
+   + reto final de memoria. Mecánica: elegir entre 3 alternativas.
    ============================================================ */
 'use strict';
 
@@ -28,13 +30,16 @@ const reduceMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)').m
 
 /* ---------- Estado ---------- */
 const estado = {
-  rondas: [],
-  indice: 0,
+  rondas: [],          /* 5 retos: uno por característica, en orden de estación */
+  indice: 0,           /* estación actual (0–4); 5 = reto final */
+  fase: 'estaciones',
   puntos: 0,
   racha: 0,
   rachaMax: 0,
-  aciertos: 0,
+  aciertos: 0,         /* estaciones + reto final */
+  resultados: [],      /* ok por estación */
   fallosTipos: [],
+  seleccionadas: null, /* índices de tarjetas del reto final */
   tInicio: null,
   tRonda: null,
   corriendo: false,
@@ -43,6 +48,8 @@ const estado = {
 };
 
 window.estado = estado; /* referencia de lectura para el arnés de QA */
+
+const TOTAL_RONDAS = 6; /* 5 estaciones + reto final */
 
 /* ---------- Audio (sintetizado, sin archivos) ---------- */
 const audio = {
@@ -106,6 +113,11 @@ const audio = {
     this.tono(196, .16, 'sawtooth', .10, 0);
     this.tono(147, .22, 'sawtooth', .10, .10);
   },
+  estacion() {
+    this.tono(392, .09, 'triangle', .12, 0);
+    this.tono(523, .14, 'triangle', .12, .08);
+    this.golpe();
+  },
   fin()    {
     this.tono(523, .12, 'sine', .14, 0);
     this.tono(659, .12, 'sine', .14, .11);
@@ -130,32 +142,15 @@ function alternarSonido() {
   if (!audio.silencio) audio.tap();
 }
 
-/* ---------- Muestreo de retos ---------- */
+/* ---------- Muestreo: un reto por característica ---------- */
 function muestrearPartida() {
-  const rondas = [];
-  for (const bloque of window.PLAN_PARTIDA) {
-    const bolsa = barajar(window.BANCO.filter(r => r.tier === bloque.tier));
-    rondas.push(...bolsa.slice(0, bloque.n));
-  }
-  return rondas;
+  return window.ESTACIONES.map(est => {
+    const bolsa = barajar(window.BANCO.filter(r => r.car === est.car));
+    return bolsa[0];
+  });
 }
 
-/* ---------- Escena: línea del tiempo y chips ---------- */
-const TIMELINES = {
-  sailco: {
-    pegada: true,
-    periodos: [['T1', '40'], ['T2', '60'], ['T3', '75'], ['T4', '25']]
-  },
-  acme: {
-    pegada: true,
-    periodos: [['M1', '100'], ['M2', '250'], ['M3', '190'], ['M4', '140'], ['M5', '220'], ['M6', '110']]
-  },
-  general: {
-    pegada: false,
-    periodos: [['P1', '—'], ['P2', '—'], ['P3', '—'], ['P4', '—']]
-  }
-};
-
+/* ---------- Escena: estaciones, chips y almacén ---------- */
 const ICONO_CHIP = {
   factory: '#ic-fabrica',
   box: '#ic-caja',
@@ -166,17 +161,30 @@ const ICONO_CHIP = {
   bolt: '#ic-rayo'
 };
 
-function pintarLineaTiempo(caso) {
-  const tl = TIMELINES[caso] || TIMELINES.general;
-  const cont = $('#linea-tiempo');
-  cont.classList.toggle('pegada', tl.pegada);
-  cont.innerHTML = tl.periodos.map(([p, d]) =>
-    `<div class="periodo"><b>${p}</b><span>${d}</span></div>`
-  ).join('');
+function pintarEstaciones() {
+  const cont = $('#estaciones');
+  let html = '<span class="estacion-extremo">Materia<br>prima</span>';
+  window.ESTACIONES.forEach((est, i) => {
+    if (i > 0) html += '<i class="estacion-flecha" aria-hidden="true"></i>';
+    const res = estado.resultados[i]; /* undefined = pendiente */
+    let cls = 'estacion-nodo';
+    if (res === true) cls += ' ok';
+    else if (res === false) cls += ' mal';
+    else if (i === estado.indice && estado.fase === 'estaciones') cls += ' actual';
+    html += `<span class="${cls}" aria-hidden="true"><b>${i + 1}</b></span>`;
+  });
+  html += '<span class="estacion-extremo">Producto<br>terminado</span>';
+  cont.innerHTML = html;
+
+  /* nivel de transformación del producto en la banda */
+  const nivel = Math.min(estado.aciertos, 5);
+  document.querySelector('.escena').setAttribute('data-nivel', String(nivel));
 }
 
 function pintarChips(chips) {
-  $('#chips').innerHTML = (chips || []).map(c =>
+  const cont = $('#chips');
+  cont.hidden = !chips || chips.length === 0;
+  cont.innerHTML = (chips || []).map(c =>
     `<span class="chip"><svg class="icono"><use href="${ICONO_CHIP[c.i] || '#ic-caja'}"/></svg><span>${c.l}:</span><b>${c.v}</b></span>`
   ).join('');
 }
@@ -197,15 +205,17 @@ function pintarAlmacen() {
 function iniciarPartida() {
   estado.rondas = muestrearPartida();
   estado.indice = 0;
+  estado.fase = 'estaciones';
   estado.puntos = 0;
   estado.racha = 0;
   estado.rachaMax = 0;
   estado.aciertos = 0;
+  estado.resultados = [];
   estado.fallosTipos = [];
   estado.respondida = false;
 
-  const progreso = $('#progreso');
-  progreso.innerHTML = estado.rondas.map(() => '<span class="progreso-dot"></span>').join('');
+  $('#progreso').innerHTML = Array.from({ length: TOTAL_RONDAS },
+    () => '<span class="progreso-dot"></span>').join('');
 
   pintarAlmacen();
   cambiarPantalla('juego');
@@ -224,18 +234,23 @@ function actualizarReloj() {
   $('#m-tiempo').textContent = fmtTiempo(seg);
 }
 
+/* ---------- Ronda de estación ---------- */
 function pintarRonda() {
   const reto = estado.rondas[estado.indice];
-  const n = estado.rondas.length;
+  const est = window.ESTACIONES[estado.indice];
 
   estado.respondida = false;
   estado.tRonda = Date.now();
 
-  $('#reto-ronda').textContent = `Ronda ${estado.indice + 1} de ${n}`;
-  $('#reto-tipo').textContent = reto.etiqueta;
+  $('#reto-ronda').textContent = `Estación ${estado.indice + 1} de 5`;
+  $('#reto-tipo').textContent = est.corto;
   $('#pregunta').innerHTML = reto.pregunta;
+  $('#pregunta').hidden = false;
+  $('#opciones').hidden = false;
+  $('#reto-final').hidden = true;
+  $('.escena').hidden = false;
 
-  pintarLineaTiempo(reto.caso);
+  pintarEstaciones();
   pintarChips(reto.chips);
 
   const opciones = barajar(reto.opciones);
@@ -244,7 +259,7 @@ function pintarRonda() {
   opciones.forEach((op, i) => {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'opcion' + (op.largo ? ' opcion-larga' : '');
+    btn.className = 'opcion';
     btn._ok = !!op.ok;
     btn.innerHTML =
       `<span class="letra" aria-hidden="true">${'ABC'[i]}</span>` +
@@ -254,16 +269,23 @@ function pintarRonda() {
     cont.appendChild(btn);
   });
 
+  ocultarFeedback();
+  marcarProgreso();
+}
+
+function ocultarFeedback() {
   const fb = $('#feedback');
   fb.hidden = true;
   fb.classList.remove('acierto', 'fallo');
+}
 
+function marcarProgreso() {
   const dots = progresoDots();
   dots.forEach((d, i) => d.classList.toggle('actual', i === estado.indice));
   $('#m-puntos').textContent = estado.puntos;
   $('#m-racha').textContent = estado.racha;
   $('#progreso').setAttribute('aria-label',
-    `Progreso: ronda ${estado.indice + 1} de ${n}, ${estado.aciertos} aciertos`);
+    `Progreso: ${estado.fase === 'estaciones' ? `estación ${estado.indice + 1} de 5` : 'reto final'}, ${estado.aciertos} aciertos`);
 }
 
 function progresoDots() {
@@ -275,6 +297,7 @@ function responder(btn) {
   estado.respondida = true;
 
   const reto = estado.rondas[estado.indice];
+  const est = window.ESTACIONES[estado.indice];
   const acierto = btn._ok;
   const botones = Array.from($('#opciones').children);
   botones.forEach(b => { b.disabled = true; });
@@ -283,12 +306,11 @@ function responder(btn) {
   const icoX = '<use href="#ic-x"/>';
 
   botones.forEach((b) => {
-    const esLaElegida = b === btn;
     if (b._ok) {
       b.classList.add('correcta');
       b.querySelector('.opcion-ico').innerHTML = icoCheck;
       b.querySelector('.opcion-ico').style.visibility = 'visible';
-    } else if (esLaElegida) {
+    } else if (b === btn) {
       b.classList.add('incorrecta');
       b.querySelector('.opcion-ico').innerHTML = icoX;
       b.querySelector('.opcion-ico').style.visibility = 'visible';
@@ -299,34 +321,35 @@ function responder(btn) {
 
   const fb = $('#feedback');
   fb.hidden = false;
-  const fbTexto = $('#feedback-texto');
-  const fbIcono = $('#feedback-icono');
 
   if (acierto) {
     const segRonda = (Date.now() - estado.tRonda) / 1000;
-    const bonusRapidez = segRonda <= 10 ? 30 : (segRonda <= 18 ? 15 : 0);
+    const bonusRapidez = segRonda <= 8 ? 30 : (segRonda <= 15 ? 15 : 0);
     const bonusRacha = Math.min(estado.racha, 5) * 10;
-    const ganancia = 100 + bonusRapidez + bonusRacha;
 
-    estado.puntos += ganancia;
+    estado.puntos += 100 + bonusRapidez + bonusRacha;
     estado.racha += 1;
     estado.rachaMax = Math.max(estado.rachaMax, estado.racha);
     estado.aciertos += 1;
 
     fb.classList.add('acierto');
-    fbIcono.innerHTML = '<svg class="icono">' + icoCheck + '</svg>';
-    fbTexto.textContent = `Correcto. ${reto.fb.ok}`;
+    $('#feedback-icono').innerHTML = '<svg class="icono">' + icoCheck + '</svg>';
+    $('#feedback-texto').textContent = `Correcto. ${reto.fb.ok}`;
     audio.correcto();
+    audio.estacion();
   } else {
     estado.racha = 0;
-    estado.fallosTipos.push(reto.etiqueta);
+    estado.fallosTipos.push(est.nombre);
     fb.classList.add('fallo');
-    fbIcono.innerHTML = '<svg class="icono">' + icoX + '</svg>';
-    fbTexto.textContent = `Incorrecto. ${reto.fb.mal}`;
+    $('#feedback-icono').innerHTML = '<svg class="icono">' + icoX + '</svg>';
+    $('#feedback-texto').textContent = `Incorrecto. ${reto.fb.mal}`;
     audio.error();
   }
 
+  estado.resultados[estado.indice] = acierto;
+  pintarEstaciones();
   pintarAlmacen();
+
   const dots = progresoDots();
   dots[estado.indice].classList.add(acierto ? 'ok' : 'mal');
   dots[estado.indice].classList.remove('actual');
@@ -336,19 +359,160 @@ function responder(btn) {
 
   const ultima = estado.indice === estado.rondas.length - 1;
   $('#btn-siguiente').innerHTML = ultima
-    ? 'Ver resultado <svg class="icono"><use href="#ic-estrella"/></svg>'
+    ? 'Reto final <svg class="icono"><use href="#ic-estrella"/></svg>'
     : 'Siguiente <svg class="icono"><use href="#ic-flecha"/></svg>';
 
   $('#btn-siguiente').focus();
 }
 
+/* ---------- Reto final: memoria del cuadro ---------- */
+function pintarRetoFinal() {
+  const rf = window.RETO_FINAL;
+
+  estado.indice = 5;
+  estado.fase = 'final';
+  estado.respondida = false;
+  estado.tRonda = Date.now();
+
+  $('#reto-ronda').textContent = 'Reto final';
+  $('#reto-tipo').textContent = 'Memoria del cuadro';
+  $('#pregunta').hidden = true;
+  $('#opciones').hidden = true;
+  $('#reto-final').hidden = false;
+  $('.escena').hidden = true; /* más espacio para las tarjetas de memoria */
+
+  pintarEstaciones();
+  pintarChips([]);
+
+  $('#cuadro-titulo').textContent = rf.titulo;
+  $('#cuadro-instr').textContent = rf.instrucciones;
+
+  const nDist = 2 + azar(2); /* 2 o 3 distractores → 7 u 8 tarjetas */
+  const tarjetas = barajar([
+    ...rf.correctas.map(t => ({ texto: t, ok: true })),
+    ...barajar(rf.distractores).slice(0, nDist).map(t => ({ texto: t, ok: false }))
+  ]);
+
+  const cont = $('#tarjetas');
+  cont.innerHTML = '';
+  estado.tarjetas = tarjetas;
+  estado.seleccionadas = new Set();
+  tarjetas.forEach((t, i) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tarjeta-cara';
+    btn._ok = t.ok;
+    btn.setAttribute('aria-pressed', 'false');
+    btn.innerHTML =
+      `<svg class="icono tarjeta-ico" aria-hidden="true"><use href="#ic-check"/></svg><span>${t.texto}</span>`;
+    btn.addEventListener('click', () => alternarTarjeta(btn));
+    cont.appendChild(btn);
+  });
+
+  const btnConfirmar = $('#btn-confirmar');
+  btnConfirmar.disabled = true;
+  btnConfirmar.innerHTML = 'Selecciona 5 <svg class="icono"><use href="#ic-check"/></svg>';
+
+  ocultarFeedback();
+  marcarProgreso();
+}
+
+function alternarTarjeta(btn) {
+  if (estado.respondida) return;
+  const idx = Array.from($('#tarjetas').children).indexOf(btn);
+  if (estado.seleccionadas.has(idx)) {
+    estado.seleccionadas.delete(idx);
+    btn.classList.remove('elegida');
+    btn.setAttribute('aria-pressed', 'false');
+  } else {
+    if (estado.seleccionadas.size >= 5) return; /* máximo 5 */
+    estado.seleccionadas.add(idx);
+    btn.classList.add('elegida');
+    btn.setAttribute('aria-pressed', 'true');
+  }
+  audio.tap();
+  const n = estado.seleccionadas.size;
+  const btnConfirmar = $('#btn-confirmar');
+  btnConfirmar.disabled = n !== 5;
+  btnConfirmar.innerHTML = (n === 5 ? 'Confirmar selección' : `Selecciona ${5 - n} más`)
+    + ' <svg class="icono"><use href="#ic-check"/></svg>';
+}
+
+function confirmarReto() {
+  if (estado.respondida || estado.seleccionadas.size !== 5) return;
+  estado.respondida = true;
+
+  const hijos = Array.from($('#tarjetas').children);
+  let correctas = 0;
+  hijos.forEach((b, i) => {
+    b.disabled = true;
+    if (estado.seleccionadas.has(i)) {
+      if (b._ok) {
+        b.classList.add('correcta');
+      } else {
+        b.classList.add('incorrecta');
+      }
+    } else if (b._ok) {
+      b.classList.add('pendiente');
+    }
+  });
+
+  const todasOk = hijos.every((b, i) => estado.seleccionadas.has(i) === b._ok);
+
+  const fb = $('#feedback');
+  fb.hidden = false;
+  const segRonda = (Date.now() - estado.tRonda) / 1000;
+
+  if (todasOk) {
+    const bonusRapidez = segRonda <= 12 ? 30 : (segRonda <= 20 ? 15 : 0);
+    estado.puntos += 200 + bonusRapidez;
+    estado.racha += 1;
+    estado.rachaMax = Math.max(estado.rachaMax, estado.racha);
+    estado.aciertos += 1;
+    fb.classList.add('acierto');
+    $('#feedback-icono').innerHTML = '<svg class="icono"><use href="#ic-check"/></svg>';
+    $('#feedback-texto').textContent = 'Cuadro completo: esas son las 5 características del planteamiento.';
+    audio.correcto();
+  } else {
+    const nOk = hijos.filter((b, i) => estado.seleccionadas.has(i) && b._ok).length;
+    estado.puntos += nOk * 40;
+    estado.racha = 0;
+    estado.fallosTipos.push('Memoria del cuadro');
+    fb.classList.add('fallo');
+    $('#feedback-icono').innerHTML = '<svg class="icono"><use href="#ic-x"/></svg>';
+    $('#feedback-texto').textContent = 'La selección no cierra. Las 5 correctas quedan marcadas: revísalas en el resultado.';
+    audio.error();
+  }
+
+  estado.resultados[5] = todasOk;
+
+  const dots = progresoDots();
+  dots[5].classList.add(todasOk ? 'ok' : 'mal');
+  dots[5].classList.remove('actual');
+
+  $('#m-puntos').textContent = estado.puntos;
+  $('#m-racha').textContent = estado.racha;
+  $('#progreso').setAttribute('aria-label',
+    `Reto final contestado, ${estado.aciertos} aciertos`);
+
+  const btnConfirmar = $('#btn-confirmar');
+  btnConfirmar.disabled = true;
+  btnConfirmar.innerHTML = 'Ver resultado <svg class="icono"><use href="#ic-estrella"/></svg>';
+  $('#btn-siguiente').focus();
+}
+
+/* ---------- Avance y cierre ---------- */
 function siguiente() {
   audio.tap();
-  if (estado.indice >= estado.rondas.length - 1) {
-    terminarPartida();
+  if (estado.fase === 'estaciones') {
+    if (estado.indice >= estado.rondas.length - 1) {
+      pintarRetoFinal();
+    } else {
+      estado.indice += 1;
+      pintarRonda();
+    }
   } else {
-    estado.indice += 1;
-    pintarRonda();
+    terminarPartida();
   }
 }
 
@@ -356,31 +520,35 @@ function terminarPartida() {
   estado.corriendo = false;
   clearInterval(estado.reloj);
   const seg = Math.floor((Date.now() - estado.tInicio) / 1000);
-  const n = estado.rondas.length;
 
   $('#r-puntos').textContent = estado.puntos;
-  $('#r-aciertos').textContent = `${estado.aciertos}/${n}`;
+  $('#r-aciertos').textContent = `${estado.aciertos}/${TOTAL_RONDAS}`;
   $('#r-racha').textContent = estado.rachaMax;
   $('#r-tiempo').textContent = fmtTiempo(seg);
 
-  const titulo = $('#resultado-titulo');
-  if (estado.aciertos === n) titulo.textContent = 'Maestro de la planeación';
-  else if (estado.aciertos >= n - 2) titulo.textContent = 'Planificador sólido';
-  else if (estado.aciertos >= Math.ceil(n / 2)) titulo.textContent = 'Planificador en entrenamiento';
-  else titulo.textContent = 'Turno de repaso';
+  $('#cuadro-lista').innerHTML = window.ESTACIONES.map(est =>
+    `<li>${est.nombre}</li>`).join('');
 
-  const repaso = $('#repaso-texto');
-  if (estado.aciertos === n) {
-    repaso.textContent = 'Turno perfecto: planteaste variables, balances, capacidad y función objetivo como en clase.';
-  } else if (estado.fallosTipos.length) {
-    const unicos = [...new Set(estado.fallosTipos)].slice(0, 3).join(', ').toLowerCase();
-    repaso.textContent = `Tus retos pendientes: ${unicos}. Cada periodo debe conservar el flujo del modelo.`;
+  const titulo = $('#resultado-titulo');
+  const sub = $('#resultado-sub');
+  if (estado.aciertos === TOTAL_RONDAS) {
+    titulo.textContent = '¡Proceso dominado!';
+    sub.textContent = 'Identificaste las 5 características: puedes llenar el cuadro completo.';
+  } else if (estado.aciertos >= 4) {
+    titulo.textContent = 'Proceso casi completo';
+    sub.textContent = 'Faltan pocas características: da otro recorrido para afinar la memoria.';
+  } else if (estado.aciertos >= 3) {
+    titulo.textContent = 'Proceso en marcha';
+    sub.textContent = 'Vas por buen camino: repasa las estaciones que fallaron.';
+  } else {
+    titulo.textContent = 'Turno de repaso';
+    sub.textContent = 'Vuelve a recorrer la línea para fijar las 5 características.';
   }
 
   cambiarPantalla('resultado');
   audio.fin();
 
-  if (estado.aciertos >= n - 2 && !reduceMovimiento) lanzarConfeti();
+  if (estado.aciertos >= 4 && !reduceMovimiento) lanzarConfeti();
 }
 
 function lanzarConfeti() {
@@ -416,7 +584,7 @@ document.addEventListener('keydown', (e) => {
     }
     return;
   }
-  if (['1', '2', '3'].includes(e.key)) {
+  if (estado.fase === 'estaciones' && ['1', '2', '3'].includes(e.key)) {
     const btn = $('#opciones').children[Number(e.key) - 1];
     if (btn && !estado.respondida) btn.click();
   } else if (e.key === 'Enter' && estado.respondida) {
@@ -429,6 +597,7 @@ document.addEventListener('keydown', (e) => {
 /* ---------- Eventos ---------- */
 $('#btn-comenzar').addEventListener('click', () => { audio.asegurar(); audio.tap(); iniciarPartida(); });
 $('#btn-siguiente').addEventListener('click', siguiente);
+$('#btn-confirmar').addEventListener('click', confirmarReto);
 $('#btn-repetir').addEventListener('click', () => { audio.tap(); iniciarPartida(); });
 $('#btn-inicio').addEventListener('click', () => { audio.tap(); cambiarPantalla('inicio'); });
 $('#btn-sonido').addEventListener('click', alternarSonido);
@@ -439,22 +608,34 @@ sincronizarSonido();
 /* ---------- Ganchos de QA (se activan solo con hash) ---------- */
 (function ganchoQA() {
   const h = location.hash;
-  const responderPrimera = (bien) => {
+  const responderEstacion = (bien) => {
     const botones = Array.from($('#opciones').children);
     const elegido = bien ? botones.find(b => b._ok) : botones.find(b => !b._ok);
     elegido.click();
+  };
+  const resolverRetoFinal = (bien) => {
+    const tarjetas = Array.from($('#tarjetas').children);
+    if (bien) {
+      tarjetas.filter(b => b._ok).forEach(b => { if (!b.classList.contains('elegida')) b.click(); });
+    } else {
+      const malas = tarjetas.filter(b => !b._ok);
+      tarjetas.filter(b => b._ok).slice(0, 3).forEach(b => b.click());
+      malas.slice(0, 2).forEach(b => b.click());
+    }
+    $('#btn-confirmar').click();
   };
   if (h === '#jugar') {
     iniciarPartida();
   } else if (h === '#feedback-ok' || h === '#feedback-mal') {
     iniciarPartida();
-    responderPrimera(h === '#feedback-ok');
+    responderEstacion(h === '#feedback-ok');
+  } else if (h === '#reto-final') {
+    iniciarPartida();
+    for (let i = 0; i < 5; i++) { responderEstacion(true); siguiente(); }
   } else if (h === '#resultado') {
     iniciarPartida();
-    const n = estado.rondas.length;
-    for (let i = 0; i < n; i++) {
-      responderPrimera(i < 6);
-      siguiente();
-    }
+    for (let i = 0; i < 5; i++) { responderEstacion(i < 6); siguiente(); }
+    resolverRetoFinal(true);
+    siguiente();
   }
 })();

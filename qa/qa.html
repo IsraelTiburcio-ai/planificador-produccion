@@ -1,8 +1,10 @@
 <!DOCTYPE html>
-<!-- QA automatizado: se sirve junto a index.html y ejecuta verificaciones
-     en un iframe del tamaño exacto del viewport. Uso:
-     qa.html           → batería completa (overflow, táctiles, 5 partidas)
-     qa.html#shot-X    → prepara un estado para captura (intro|juego|feedback-ok|feedback-mal|resultado) -->
+<!-- QA automatizado del juego CORREGIDO (5 estaciones + reto final):
+     se sirve junto a index.html y ejecuta verificaciones en un iframe
+     del tamaño exacto del viewport. Uso:
+     qa.html            → batería completa (overflow, táctiles, 5 partidas)
+     qa.html#shot-X     → prepara un estado para captura
+                          (intro|juego|feedback-ok|feedback-mal|reto-final|resultado) -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -23,7 +25,10 @@ const afirmar = (cond, msg) => {
 };
 
 const marco = document.getElementById('marco');
-const ESTADO_HASH = { 'intro': '', 'juego': '#jugar', 'feedback-ok': '#feedback-ok', 'feedback-mal': '#feedback-mal', 'resultado': '#resultado' };
+const ESTADO_HASH = {
+  'intro': '', 'juego': '#jugar', 'feedback-ok': '#feedback-ok',
+  'feedback-mal': '#feedback-mal', 'reto-final': '#reto-final', 'resultado': '#resultado'
+};
 const params = (location.hash.match(/shot-([\w-]+)/) || [])[1];
 const ALTO_FORZADO = location.hash.includes('h844') ? 844 : null;
 
@@ -54,6 +59,19 @@ function estadoVisible(nombre) {
   return !doc().getElementById('pantalla-' + nombre).classList.contains('oculta');
 }
 
+function iniciarJuego(d) {
+  d.getElementById('btn-comenzar').click();
+}
+
+/* Recorre 5 estaciones (mezclando aciertos/fallos) y llega al reto final */
+function jugarEstaciones(d, w, probAcierto) {
+  for (let i = 0; i < 5; i++) {
+    const bots = Array.from(d.querySelectorAll('#opciones .opcion'));
+    (Math.random() < probAcierto ? bots.find(b => b._ok) : bots.find(b => !b._ok)).click();
+    d.getElementById('btn-siguiente').click();
+  }
+}
+
 window.onerror = (msg) => { log('ERROR JS: ' + msg); log('FIN-QA'); };
 
 function iniciarBateria() {
@@ -75,76 +93,113 @@ function iniciarBateria() {
     // Pantalla inicial
     afirmar(estadoVisible('inicio'), 'arranca en la pantalla de inicio');
     afirmar(sinOverflowHorizontal(), 'inicio: sin overflow horizontal');
-    afirmar(d.getElementById('btn-comenzar').getBoundingClientRect().height >= 44, 'botón comenzar ≥ 44px');
+    afirmar(d.getElementById('btn-comenzar').getBoundingClientRect().height >= 44, 'botón iniciar ≥ 44px');
 
     // Iniciar partida
     d.getElementById('btn-comenzar').click();
-    afirmar(estadoVisible('juego'), 'al comenzar se muestra la pantalla de juego');
-    afirmar(w.estado.rondas.length === 8, 'la partida tiene 8 retos (obtenido ' + w.estado.rondas.length + ')');
-    afirmar(d.querySelectorAll('.opcion').length === 3, 'se muestran 3 opciones');
-    afirmar(sinOverflowHorizontal(), 'ronda 1: sin overflow horizontal');
-    log('  altoDocumento(ronda1)=' + altoDocumento() + ' (viewport ' + window.innerHeight + ')');
+    afirmar(estadoVisible('juego'), 'al iniciar se muestra la línea de producción');
+    afirmar(w.estado.rondas.length === 5, 'la partida tiene 5 estaciones (obtenido ' + w.estado.rondas.length + ')');
+    afirmar(new Set(w.estado.rondas.map(r => r.car)).size === 5, 'las 5 características están cubiertas');
+    afirmar(d.querySelectorAll('.estacion-nodo').length === 5, 'la escena muestra 5 nodos de estación');
+    afirmar(d.querySelector('.estacion-nodo.actual') !== null, 'la estación 1 está activa');
+    afirmar(d.querySelectorAll('#opciones .opcion').length === 3, 'se muestran 3 opciones');
+    afirmar(sinOverflowHorizontal(), 'estación 1: sin overflow horizontal');
+    log('  altoDocumento(estacion1)=' + altoDocumento() + ' (viewport ' + altoVisible() + ')');
 
     // Botones táctiles
     const alturas = Array.from(d.querySelectorAll('.opcion')).map(b => b.getBoundingClientRect().height);
     afirmar(alturas.every(h => h >= 44), 'todas las opciones ≥ 44px (' + alturas.map(h => Math.round(h)).join('/') + ')');
 
-    // Fórmulas no desbordan su contenedor
-    let fDesbordadas = 0;
-    d.querySelectorAll('.opcion, .pregunta, .chip, .f').forEach(el => {
-      if (el.scrollWidth > el.clientWidth + 1) fDesbordadas++;
+    // Textos no desbordan su contenedor
+    let desbordadas = 0;
+    d.querySelectorAll('.opcion, .pregunta, .chip, .estacion-extremo').forEach(el => {
+      if (el.scrollWidth > el.clientWidth + 1) desbordadas++;
     });
-    afirmar(fDesbordadas === 0, 'ninguna fórmula/texto desborda su contenedor (' + fDesbordadas + ')');
+    afirmar(desbordadas === 0, 'ningún texto desborda su contenedor (' + desbordadas + ')');
 
-    // Responder correcto → feedback
-    const btnOk = Array.from(d.querySelectorAll('.opcion')).find(b => b._ok);
+    // Responder correcto → feedback + estación activada
+    const btnOk = Array.from(d.querySelectorAll('#opciones .opcion')).find(b => b._ok);
     btnOk.click();
     afirmar(!d.getElementById('feedback').hidden, 'aparece feedback al responder');
     afirmar(d.getElementById('feedback').classList.contains('acierto'), 'feedback marcado como acierto');
     afirmar(d.getElementById('feedback-texto').textContent.length > 10, 'feedback con texto explicativo');
+    afirmar(d.querySelectorAll('.estacion-nodo.ok').length === 1, 'la estación 1 quedó activada (verde)');
     afirmar(d.querySelectorAll('.progreso-dot.ok').length === 1, 'punto de progreso verde');
     afirmar(d.getElementById('almacen-contador').textContent === '1', 'almacén suma una caja');
     const fbBox = d.getElementById('feedback').getBoundingClientRect();
     afirmar(fbBox.bottom <= altoVisible(), 'feedback visible sin scroll (bottom=' + Math.round(fbBox.bottom) + ')');
+    afirmar(w.estado.fase === 'estaciones' && w.estado.indice === 0, 'sigue en estación 1 tras responder');
 
     // Responder mal → muestra la correcta
     d.getElementById('btn-siguiente').click();
-    const btnMal = Array.from(d.querySelectorAll('.opcion')).find(b => !b._ok);
+    afirmar(d.getElementById('reto-ronda').textContent.includes('2'), 'avanza a la estación 2 (' + d.getElementById('reto-ronda').textContent + ')');
+    const btnMal = Array.from(d.querySelectorAll('#opciones .opcion')).find(b => !b._ok);
     btnMal.click();
     afirmar(d.getElementById('feedback').classList.contains('fallo'), 'feedback marcado como fallo');
-    afirmar(d.querySelectorAll('.opcion.correcta').length === 1, 'se revela la opción correcta al fallar');
-    afirmar(d.querySelectorAll('.progreso-dot.mal').length === 1, 'punto de progreso rojo');
-    afirmar(w.estado.aciertos === 1, 'aciertos = 1 tras 2 rondas');
+    afirmar(d.querySelectorAll('#opciones .opcion.correcta').length === 1, 'se revela la opción correcta al fallar');
+    afirmar(d.querySelectorAll('.estacion-nodo.mal').length === 1, 'estación 2 marcada en rojo');
+    afirmar(w.estado.aciertos === 1, 'aciertos = 1 tras 2 estaciones');
 
     /* ---------- 5 partidas simuladas punta a punta ---------- */
     for (let p = 1; p <= 5; p++) {
       w.cambiarPantalla('inicio');
       d.getElementById('btn-comenzar').click();
       const rondas = w.estado.rondas.length;
-      const ids = new Set();
-      for (let i = 0; i < rondas; i++) {
-        ids.add(w.estado.rondas[i].id);
-        const bots = Array.from(d.querySelectorAll('.opcion'));
-        (Math.random() < 0.75 ? bots.find(b => b._ok) : bots.find(b => !b._ok)).click();
-        d.getElementById('btn-siguiente').click();
+      const cars = new Set(w.estado.rondas.map(r => r.car));
+      jugarEstaciones(d, w, 0.75);
+      afirmar(w.estado.fase === 'final', 'partida ' + p + ': tras 5 estaciones llega el reto final');
+      afirmar(!d.getElementById('reto-final').hidden, 'partida ' + p + ': panel del reto final visible');
+      afirmar(d.getElementById('cuadro-titulo').textContent.toUpperCase().includes('PLANTEAMIENTO DE PROCESO DE PRODUCCIÓN'), 'partida ' + p + ': título del cuadro presente');
+
+      const tarjetas = Array.from(d.querySelectorAll('.tarjeta-cara'));
+      const nCorrectasEnTablero = tarjetas.filter(b => b._ok).length;
+      afirmar(nCorrectasEnTablero === 5, 'partida ' + p + ': 5 tarjetas correctas en el tablero');
+      afirmar(tarjetas.length === 7 || tarjetas.length === 8, 'partida ' + p + ': 7–8 tarjetas (' + tarjetas.length + ')');
+      const alturasTarjetas = tarjetas.map(b => b.getBoundingClientRect().height);
+      afirmar(alturasTarjetas.every(h => h >= 44), 'partida ' + p + ': tarjetas ≥ 44px (' + alturasTarjetas.map(h => Math.round(h)).join('/') + ')');
+      afirmar(sinOverflowHorizontal(), 'partida ' + p + ': reto final sin overflow horizontal');
+      log('  altoDocumento(retoFinal)=' + altoDocumento());
+
+      // Confirmar deshabilitado sin 5 seleccionadas
+      afirmar(d.getElementById('btn-confirmar').disabled, 'partida ' + p + ': confirmar bloqueado con menos de 5');
+
+      // Seleccionar 5 correctas y confirmar (4 de 5 partidas: correcto)
+      const bien = (p !== 3);
+      const objetivo = bien ? tarjetas.filter(b => b._ok)
+        : [...tarjetas.filter(b => b._ok).slice(0, 3), ...tarjetas.filter(b => !b._ok).slice(0, 2)];
+      objetivo.forEach(b => b.click());
+      afirmar(!d.getElementById('btn-confirmar').disabled, 'partida ' + p + ': confirmar habilitado con 5 seleccionadas');
+      d.getElementById('btn-confirmar').click();
+      if (bien) {
+        afirmar(d.getElementById('feedback').classList.contains('acierto'), 'partida ' + p + ': reto final correcto');
+        afirmar(d.querySelectorAll('.tarjeta-cara.correcta').length === 5, 'partida ' + p + ': 5 tarjetas verdes');
+      } else {
+        afirmar(d.getElementById('feedback').classList.contains('fallo'), 'partida ' + p + ': reto final con fallo detectado');
+        afirmar(d.querySelectorAll('.tarjeta-cara.pendiente').length >= 1, 'partida ' + p + ': correctas omitidas quedan marcadas');
       }
+      d.getElementById('btn-siguiente').click();
       afirmar(estadoVisible('resultado'), 'partida ' + p + ': termina en pantalla de resultado');
-      afirmar(ids.size === rondas, 'partida ' + p + ': sin retos repetidos');
-      const t = d.getElementById('r-tiempo').textContent;
-      afirmar(/^\d+:\d\d$/.test(t), 'partida ' + p + ': tiempo formateado (' + t + ')');
-      afirmar(d.getElementById('r-aciertos').textContent.includes('/8'), 'partida ' + p + ': marcador X/8 (' + d.getElementById('r-aciertos').textContent + ')');
-      afirmar(w.estado.puntos >= w.estado.aciertos * 100, 'partida ' + p + ': puntos coherentes (' + w.estado.puntos + ' con ' + w.estado.aciertos + ' aciertos)');
-      afirmar(d.getElementById('resultado-titulo').textContent.length > 5, 'partida ' + p + ': título de resultado presente');
-      afirmar(d.getElementById('repaso-texto').textContent.length > 5 || w.estado.aciertos === rondas, 'partida ' + p + ': texto de repaso presente');
+
+      // Resultado
+      afirmar(d.getElementById('r-aciertos').textContent.endsWith('/6'), 'partida ' + p + ': marcador X/6 (' + d.getElementById('r-aciertos').textContent + ')');
+      const itemsCuadro = Array.from(d.querySelectorAll('.cuadro-lista li')).map(li => li.textContent.trim());
+      afirmar(itemsCuadro.length === 5, 'partida ' + p + ': tarjeta de repaso con 5 características');
+      const normalizar = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const todasReflejadas = w.ESTACIONES.every(est => itemsCuadro.some(it => normalizar(it).includes(normalizar(est.nombre).slice(0, 18))));
+      afirmar(todasReflejadas, 'partida ' + p + ': las 5 características del mapa aparecen en el repaso');
+      afirmar(/^\d+:\d\d$/.test(d.getElementById('r-tiempo').textContent), 'partida ' + p + ': tiempo formateado (' + d.getElementById('r-tiempo').textContent + ')');
+      afirmar(w.estado.puntos >= 300, 'partida ' + p + ': puntos coherentes (' + w.estado.puntos + ')');
 
       // Replay
       d.getElementById('btn-repetir').click();
-      afirmar(estadoVisible('juego') && w.estado.indice === 0 && w.estado.puntos === 0, 'partida ' + p + ': replay reinicia marcador y rondas');
-      w.estado.rondas.forEach(() => {
-        const bots = Array.from(d.querySelectorAll('.opcion'));
-        bots.find(b => b._ok).click();
-        d.getElementById('btn-siguiente').click();
-      });
+      afirmar(estadoVisible('juego') && w.estado.indice === 0 && w.estado.puntos === 0 && w.estado.fase === 'estaciones',
+        'partida ' + p + ': replay reinicia marcador y estaciones');
+      afirmar(new Set(w.estado.rondas.map(r => r.car)).size === 5, 'partida ' + p + ': replay cubre las 5 características');
+      jugarEstaciones(d, w, 1);
+      const tarjetas2 = Array.from(d.querySelectorAll('.tarjeta-cara'));
+      tarjetas2.filter(b => b._ok).forEach(b => b.click());
+      d.getElementById('btn-confirmar').click();
+      d.getElementById('btn-siguiente').click();
       afirmar(estadoVisible('resultado'), 'partida ' + p + ': segunda vuelta completa');
     }
 
@@ -153,7 +208,7 @@ function iniciarBateria() {
     for (let i = 0; i < 10; i++) { w.estado.rondas = w.muestrearPartida(); muestras.add(w.estado.rondas.map(r => r.id).join('|')); }
     afirmar(muestras.size >= 5, 'aleatoriedad: 10 muestreos generan ≥5 secuencias distintas (' + muestras.size + ')');
 
-    // Audio: silenciar alterna y persiste
+    // Audio: silenciar alterna
     d.getElementById('btn-sonido').click();
     afirmar(d.getElementById('btn-sonido').getAttribute('aria-pressed') === 'false', 'mute alterna aria-pressed');
     d.getElementById('btn-sonido').click();

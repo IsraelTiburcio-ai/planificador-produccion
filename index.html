@@ -112,7 +112,7 @@
         </div>
         <p class="cinta">GIMNASIO 2 · OPTIMIZACIÓN I</p>
         <h1>Planificador de&nbsp;Producción</h1>
-        <p class="subtitulo">Equilibra la fábrica</p>
+        <p class="subtitulo">Recorre el proceso y descubre sus características</p>
       </div>
 
       <div class="tarjeta reglas">
@@ -120,29 +120,29 @@
         <ol class="pasos">
           <li>
             <span class="paso-icono" aria-hidden="true"><svg class="icono"><use href="#ic-diana"/></svg></span>
-            <span>Lee el reto y los datos de la fábrica: demanda, capacidad, inventario y costos.</span>
+            <span>Recorre la línea de producción: 5 estaciones, una por cada característica del planteamiento.</span>
           </li>
           <li>
             <span class="paso-icono" aria-hidden="true"><svg class="icono"><use href="#ic-check"/></svg></span>
-            <span>Elige el planteamiento correcto: variables, balances, capacidad o función objetivo.</span>
+            <span>Elige la opción correcta para activar la estación y transformar el producto.</span>
           </li>
           <li>
             <span class="paso-icono" aria-hidden="true"><svg class="icono"><use href="#ic-fuego"/></svg></span>
-            <span>Gana puntos por acierto, racha y rapidez. 8 retos por turno.</span>
+            <span>Cierra con el reto final: selecciona las 5 características del cuadro.</span>
           </li>
         </ol>
-        <div class="leyenda" aria-label="Notación del modelo">
-          <span class="leyenda-item"><b>xⱼ</b> producción regular</span>
-          <span class="leyenda-item"><b>yⱼ</b> tiempo extra</span>
-          <span class="leyenda-item"><b>rⱼ</b> inventario final</span>
+        <div class="leyenda" aria-label="Contenido de la partida">
+          <span class="leyenda-item"><b>5</b> estaciones</span>
+          <span class="leyenda-item"><b>1</b> reto final</span>
+          <span class="leyenda-item"><b>≈ 60 s</b> por turno</span>
         </div>
       </div>
 
       <button id="btn-comenzar" class="btn btn-primario">
-        Comenzar turno
+        Iniciar recorrido
         <svg class="icono"><use href="#ic-flecha"/></svg>
       </button>
-      <p class="nota-inicio">≈ 90 segundos · basado en Sailco y Manufacturera Acme · Gimnasio 2, págs. 37–38</p>
+      <p class="nota-inicio">basado en el cuadro manuscrito de la clase · Gimnasio 2, pág. 37</p>
     </section>
 
     <!-- ══════════ PANTALLA: JUEGO ══════════ -->
@@ -185,18 +185,30 @@
             <span class="almacen-contador" id="almacen-contador">0</span>
           </div>
         </div>
-        <div class="linea-tiempo" id="linea-tiempo"></div>
+        <div class="linea-estaciones" id="estaciones" role="img" aria-label="Línea de producción con 5 estaciones"></div>
         <div class="chips" id="chips"></div>
       </div>
 
       <!-- Reto -->
       <main class="reto">
         <div class="reto-meta">
-          <span class="reto-ronda" id="reto-ronda">Ronda 1 de 8</span>
-          <span class="reto-tipo" id="reto-tipo">Variables</span>
+          <span class="reto-ronda" id="reto-ronda">Estación 1 de 5</span>
+          <span class="reto-tipo" id="reto-tipo">Transformación</span>
         </div>
         <h2 class="pregunta" id="pregunta"></h2>
         <div class="opciones" id="opciones" role="group" aria-label="Opciones de respuesta"></div>
+
+        <!-- Reto final: memoria del cuadro -->
+        <div id="reto-final" hidden>
+          <h3 class="cuadro-titulo" id="cuadro-titulo">PLANTEAMIENTO DE PROCESO DE PRODUCCIÓN</h3>
+          <p class="cuadro-instr" id="cuadro-instr"></p>
+          <div class="tarjetas" id="tarjetas" role="group" aria-label="Tarjetas de características"></div>
+          <button class="btn btn-primario" id="btn-confirmar" disabled>
+            Confirmar selección
+            <svg class="icono"><use href="#ic-check"/></svg>
+          </button>
+        </div>
+
         <div class="feedback" id="feedback" aria-live="polite" hidden>
           <div class="feedback-icono" id="feedback-icono" aria-hidden="true"></div>
           <p class="feedback-texto" id="feedback-texto"></p>
@@ -212,8 +224,9 @@
     <section id="pantalla-resultado" class="pantalla oculta" aria-label="Resultado de la partida">
       <div class="resultado-cabecera">
         <div class="trofeo" aria-hidden="true"><svg class="icono"><use href="#ic-trofeo"/></svg></div>
-        <p class="cinta">TURNO COMPLETADO</p>
-        <h2 class="resultado-titulo" id="resultado-titulo">Planificador en entrenamiento</h2>
+        <p class="cinta cinta-exito">¡PROCESO COMPLETADO!</p>
+        <h2 class="resultado-titulo" id="resultado-titulo">Proceso dominado</h2>
+        <p class="resultado-sub" id="resultado-sub"></p>
       </div>
 
       <div class="marcador-final">
@@ -222,18 +235,16 @@
           <span class="puntaje-etiqueta">puntos</span>
         </div>
         <div class="stats-final">
-          <div class="stat"><svg class="icono"><use href="#ic-check"/></svg><b id="r-aciertos">0/8</b><span>aciertos</span></div>
+          <div class="stat"><svg class="icono"><use href="#ic-check"/></svg><b id="r-aciertos">0/6</b><span>aciertos</span></div>
           <div class="stat"><svg class="icono"><use href="#ic-fuego"/></svg><b id="r-racha">0</b><span>racha máx.</span></div>
           <div class="stat"><svg class="icono"><use href="#ic-tiempo"/></svg><b id="r-tiempo">0:00</b><span>tiempo</span></div>
         </div>
       </div>
 
       <div class="tarjeta repaso">
-        <h3 class="tarjeta-titulo">Para recordar</h3>
-        <p class="repaso-texto" id="repaso-texto"></p>
-        <p class="repaso-formula" aria-label="Ecuación de balance">
-          <span class="f f-larga">inventario anterior + producción = demanda + inventario final</span>
-        </p>
+        <h3 class="tarjeta-titulo">El cuadro que sabes llenar</h3>
+        <p class="cuadro-centro">Planteamiento de Proceso de Producción</p>
+        <ul class="cuadro-lista" id="cuadro-lista"></ul>
       </div>
 
       <div class="acciones-finales">

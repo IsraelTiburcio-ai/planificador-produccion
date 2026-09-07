@@ -1,10 +1,11 @@
-/* QA lógico — valida data.js y simula partidas (se ejecuta con Node) */
+/* QA lógico — valida data.js del juego CORREGIDO y simula partidas (Node) */
 'use strict';
 
 global.window = {};
 require('../data.js');
 const BANCO = window.BANCO;
-const PLAN = window.PLAN_PARTIDA;
+const ESTACIONES = window.ESTACIONES;
+const RETO_FINAL = window.RETO_FINAL;
 
 const azar = (n) => Math.floor(Math.random() * n);
 function barajar(arr) {
@@ -19,107 +20,141 @@ const afirmar = (cond, msg) => { if (!cond) errores.push(msg); };
 /* ---------- 1. Validez del banco ---------- */
 const ids = new Set();
 const ICONOS_VALIDOS = new Set(['factory', 'box', 'truck', 'gear', 'coin', 'calendar', 'bolt']);
-const TIERS_VALIDOS = new Set(['facil', 'medio', 'avanzado', 'final']);
-const CASOS_VALIDOS = new Set(['sailco', 'acme', 'general']);
+const CARS_VALIDOS = new Set(ESTACIONES.map(e => e.car));
 
 for (const r of BANCO) {
   const tag = `[${r.id}]`;
   afirmar(!ids.has(r.id), `${tag} id duplicado`);
   ids.add(r.id);
-  afirmar(TIERS_VALIDOS.has(r.tier), `${tag} tier inválido: ${r.tier}`);
-  afirmar(CASOS_VALIDOS.has(r.caso), `${tag} caso inválido: ${r.caso}`);
+  afirmar(CARS_VALIDOS.has(r.car), `${tag} característica inválida: ${r.car}`);
   afirmar(typeof r.pregunta === 'string' && r.pregunta.length > 10, `${tag} pregunta vacía`);
   afirmar(Array.isArray(r.opciones) && r.opciones.length === 3, `${tag} debe tener 3 opciones`);
   afirmar(r.opciones.filter(o => o.ok).length === 1, `${tag} debe tener exactamente 1 opción correcta`);
   afirmar(r.fb && r.fb.ok && r.fb.mal, `${tag} falta feedback ok/mal`);
-  afirmar(r.fb.ok.length <= 160 && r.fb.mal.length <= 200, `${tag} feedback demasiado largo (1–2 líneas)`);
+  afirmar(r.fb.ok.length <= 170 && r.fb.mal.length <= 190, `${tag} feedback demasiado largo (1–2 líneas)`);
   afirmar(typeof r.etiqueta === 'string' && r.etiqueta, `${tag} falta etiqueta`);
   for (const c of r.chips || []) {
     afirmar(ICONOS_VALIDOS.has(c.i), `${tag} chip con icono inválido: ${c.i}`);
     afirmar(c.l && c.v !== undefined, `${tag} chip incompleto`);
   }
-  afirmar(!/[🇦-🇿\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(JSON.stringify(r)), `${tag} contiene emojis (prohibidos en data)`);
+  afirmar(!/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(JSON.stringify(r)), `${tag} contiene emojis (prohibidos en data)`);
 }
-console.log(`Banco: ${BANCO.length} retos — se esperaba 18–25`);
-afirmar(BANCO.length >= 18 && BANCO.length <= 25, 'el banco debe tener 18–25 retos');
+console.log(`Banco: ${BANCO.length} retos — se esperaba 15–20`);
+afirmar(BANCO.length >= 15 && BANCO.length <= 20, 'el banco debe tener 15–20 retos');
 
-const porTier = {};
-for (const r of BANCO) porTier[r.tier] = (porTier[r.tier] || 0) + 1;
-console.log('Por tier:', JSON.stringify(porTier));
-for (const b of PLAN) afirmar(porTier[b.tier] >= b.n, `tier ${b.tier} sin suficientes retos (${porTier[b.tier]}/${b.n})`);
+/* ---------- 2. Cobertura: 3–4 retos por cada característica ---------- */
+const porCar = {};
+for (const r of BANCO) porCar[r.car] = (porCar[r.car] || 0) + 1;
+console.log('Por característica:', JSON.stringify(porCar));
+afirmar(Object.keys(porCar).length === 5, 'deben existir exactamente 5 características');
+for (const est of ESTACIONES) {
+  afirmar(porCar[est.car] >= 3 && porCar[est.car] <= 4, `característica ${est.car} con ${porCar[est.car]} retos (3–4 esperados)`);
+}
 
-const suma = PLAN.reduce((s, b) => s + b.n, 0);
-console.log(`Retos por partida: ${suma} (plan: ${PLAN.map(p => `${p.n}×${p.tier}`).join(' + ')})`);
-afirmar(suma >= 7 && suma <= 8, 'la partida debe tener 7–8 retos');
+/* ---------- 3. Reto final ---------- */
+afirmar(RETO_FINAL.correctas.length === 5, 'el reto final debe tener exactamente 5 correctas');
+afirmar(RETO_FINAL.distractores.length >= 2 && RETO_FINAL.distractores.length <= 3, 'el reto final debe tener 2–3 distractores');
+const todasTarjetas = [...RETO_FINAL.correctas, ...RETO_FINAL.distractores];
+afirmar(new Set(todasTarjetas).size === todasTarjetas.length, 'tarjetas repetidas en el reto final');
+afirmar(RETO_FINAL.titulo.toUpperCase().includes('PLANTEAMIENTO DE PROCESO DE PRODUCCIÓN'), 'título del reto final');
 
-/* ---------- 2. Simulación de 5 partidas ---------- */
+/* ---------- 4. Fidelidad de redacción vs. mapa de la pág. 37 ---------- */
+const NORMALIZAR = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z]/g, '');
+const textoBanco = NORMALIZAR(JSON.stringify(BANCO) + JSON.stringify(RETO_FINAL) + JSON.stringify(ESTACIONES));
+/* Las cajas del mapa usan abreviaturas ("dos restr.", "Rest."); el juego las
+   expande ("dos restricciones", "la restricción establece…"). Se verifican
+   los términos sustantivos de cada caja. */
+const CAJAS_MAPA = [
+  { caja: 'Transformación de Productos', claves: ['transformaciondeproductos'] },
+  { caja: 'Se manejan dos restr. (materia prima y producto)', claves: ['dosrestricciones', 'materiaprima'] },
+  { caja: 'Función objetivo maximizada', claves: ['funcionobjetivomaximizada'] },
+  { caja: 'Rest. Establecer el proceso de transformación', claves: ['restriccion', 'establece', 'procesodetransformacion'] },
+  { caja: 'Caso particular de planeación de Producción', claves: ['casoparticulardeplaneaciondeproduccion'] }
+];
+for (const { caja, claves } of CAJAS_MAPA) {
+  afirmar(claves.every(k => textoBanco.includes(k)), `el juego no refleja la caja del mapa: "${caja}"`);
+}
+afirmar(textoBanco.includes(NORMALIZAR('materia prima')) && textoBanco.includes(NORMALIZAR('producto')), 'debe nombrar materia prima y producto');
+
+/* ---------- 5. Simulación de 5 partidas ---------- */
 function muestrearPartida() {
-  const rondas = [];
-  for (const bloque of PLAN) {
-    const bolsa = barajar(BANCO.filter(r => r.tier === bloque.tier));
-    rondas.push(...bolsa.slice(0, bloque.n));
-  }
-  return rondas;
+  return ESTACIONES.map(est => {
+    const bolsa = barajar(BANCO.filter(r => r.car === est.car));
+    return bolsa[0];
+  });
 }
 
-const posicionesCorrecta = { A: 0, B: 0, C: 0 };
+/* Uniformidad del barajado de opciones: 200 muestras (10 por reto) */
+const posiciones = { A: 0, B: 0, C: 0 };
+for (const reto of BANCO) {
+  for (let i = 0; i < 10; i++) {
+    const opciones = barajar(reto.opciones);
+    posiciones['ABC'[opciones.findIndex(o => o.ok)]]++;
+  }
+}
 let totalRondas = 0;
 
 for (let partida = 1; partida <= 5; partida++) {
   const rondas = muestrearPartida();
-  afirmar(rondas.length === suma, `partida ${partida}: número de rondas ${rondas.length} ≠ ${suma}`);
-  afirmar(new Set(rondas.map(r => r.id)).size === rondas.length, `partida ${partida}: reto repetido en la misma partida`);
+  afirmar(rondas.length === 5, `partida ${partida}: rondas=${rondas.length} ≠ 5`);
+  const carsUsadas = rondas.map(r => r.car);
+  afirmar(new Set(carsUsadas).size === 5, `partida ${partida}: no cubre las 5 características`);
+  afirmar(JSON.stringify(carsUsadas) === JSON.stringify(ESTACIONES.map(e => e.car)),
+    `partida ${partida}: el orden de estaciones no coincide con la línea de producción`);
 
-  const compo = {};
-  for (const r of rondas) compo[r.tier] = (compo[r.tier] || 0) + 1;
-  for (const b of PLAN) afirmar(compo[b.tier] === b.n, `partida ${partida}: composición de ${b.tier} = ${compo[b.tier]}`);
-  afirmar(rondas[rondas.length - 1].tier === 'final', `partida ${partida}: la última ronda debe ser el caso integrador`);
+  // Reto final: 7 u 8 tarjetas
+  const nDist = 2 + azar(2);
+  const tarjetas = barajar([
+    ...RETO_FINAL.correctas.map(t => ({ t, ok: true })),
+    ...barajar(RETO_FINAL.distractores).slice(0, nDist).map(t => ({ t, ok: false }))
+  ]);
+  afirmar(tarjetas.length === 5 + nDist && tarjetas.length >= 7 && tarjetas.length <= 8,
+    `partida ${partida}: tarjetas del reto final = ${tarjetas.length}`);
+  afirmar(tarjetas.filter(t => t.ok).length === 5, `partida ${partida}: deben existir 5 correctas`);
 
-  // Orden de dificultad no decreciente por bloques (facil → medio → avanzado → final)
-  const orden = { facil: 0, medio: 1, avanzado: 2, final: 3 };
-  for (let i = 1; i < rondas.length; i++) {
-    afirmar(orden[rondas[i].tier] >= orden[rondas[i - 1].tier], `partida ${partida}: dificultad no creciente en ronda ${i + 1}`);
-  }
-
-  // Simular respuestas: 80% de acierto, respuesta entre 6 y 15 s
-  let puntos = 0, racha = 0, rachaMax = 0, aciertos = 0, segTotales = 0;
+  // Simular respuestas: estaciones 6–12 s cada una; reto final ~15 s
+  let seg = 0, aciertos = 0, puntos = 0, racha = 0;
   for (const reto of rondas) {
     totalRondas++;
-    const opciones = barajar(reto.opciones);
-    posicionesCorrecta['ABC'[opciones.findIndex(o => o.ok)]]++;
-    const acierta = Math.random() < 0.8;
-    const segRonda = 6 + Math.random() * 9;
-    segTotales += segRonda + 1.2; // + transición/feedback
+    const acierta = Math.random() < 0.75;
+    const s = 6 + Math.random() * 6;
+    seg += s + 1.4;
     if (acierta) {
-      const bonusRapidez = segRonda <= 10 ? 30 : 15;
-      const bonusRacha = Math.min(racha, 5) * 10;
-      puntos += 100 + bonusRapidez + bonusRacha;
-      racha++; rachaMax = Math.max(rachaMax, racha); aciertos++;
+      const bonusRapidez = s <= 8 ? 30 : 15;
+      puntos += 100 + bonusRapidez + Math.min(racha, 5) * 10;
+      racha++; aciertos++;
     } else { racha = 0; }
   }
-  const dur = Math.round(segTotales);
-  console.log(`Partida ${partida}: rondas=${rondas.length} aciertos=${aciertos} rachaMáx=${rachaMax} pts=${puntos} duración≈${dur}s ids=${rondas.map(r => r.id).join(',')}`);
-  afirmar(dur >= 55 && dur <= 120, `partida ${partida}: duración estimada ${dur}s fuera de 60–120 s`);
-  afirmar(puntos > 0 && puntos < 2000, `partida ${partida}: puntuación sospechosa ${puntos}`);
+  const sFinal = 13 + Math.random() * 6;
+  seg += sFinal + 1.2;
+  const todasOk = Math.random() < 0.7;
+  if (todasOk) { puntos += 200 + (sFinal <= 12 ? 30 : 15); aciertos++; }
+  else { puntos += 40 * (2 + azar(3)); }
+
+  const dur = Math.round(seg);
+  console.log(`Partida ${partida}: estaciones+final=6 aciertos=${aciertos} pts=${puntos} duración≈${dur}s ids=${rondas.map(r => r.id).join(',')}`);
+  afirmar(dur >= 42 && dur <= 90, `partida ${partida}: duración estimada ${dur}s fuera de 45–90 s`);
+  afirmar(puntos >= 300 && puntos < 1800, `partida ${partida}: puntuación sospechosa ${puntos}`);
 }
 
-const total = posicionesCorrecta.A + posicionesCorrecta.B + posicionesCorrecta.C;
+const total = posiciones.A + posiciones.B + posiciones.C;
 for (const k of ['A', 'B', 'C']) {
-  const pct = Math.round(100 * posicionesCorrecta[k] / total);
-  console.log(`Posición correcta ${k}: ${posicionesCorrecta[k]}/${total} (${pct}%)`);
-  afirmar(pct >= 20 && pct <= 47, `posición ${k} sesgada (${pct}%)`);
+  const pct = Math.round(100 * posiciones[k] / total);
+  console.log(`Posición correcta ${k}: ${posiciones[k]}/${total} (${pct}%)`);
+  afirmar(pct >= 24 && pct <= 43, `posición ${k} sesgada (${pct}% de ${total})`);
 }
 
-/* ---------- 3. Cobertura de temas ---------- */
-const temas = new Set(BANCO.map(r => r.etiqueta));
-console.log('Temas cubiertos:', [...temas].join(' · '));
-for (const esperado of ['Variables', 'Balance', 'Capacidad', 'Función objetivo', 'Inventario', 'Interpretación', 'Detectar el error', 'Caso integrador', 'Costos']) {
-  afirmar(temas.has(esperado), `falta el tema ${esperado}`);
+/* ---------- 6. Distractores no absurdos ---------- */
+const PALABRAS_ABSURDAS = ['dinosaurio', 'pizza', 'videojuego', 'coche', 'comer'];
+afirmar(!PALABRAS_ABSURDAS.some(w => textoBanco.includes(NORMALIZAR(w))), 'hay distractores absurdos');
+// Toda opción debe ser sustanciosa (las fórmulas cortas tipo "min Z" cuentan por su Z)
+for (const r of BANCO) {
+  for (const o of r.opciones) {
+    const texto = o.html.replace(/<[^>]+>/g, '').trim();
+    afirmar(texto.length >= 8 || /[Zz0-9]/.test(texto),
+      `[${r.id}] opción demasiado corta para ser plausible: "${texto}"`);
+  }
 }
-const casos = {};
-for (const r of BANCO) casos[r.caso] = (casos[r.caso] || 0) + 1;
-console.log('Casos:', JSON.stringify(casos));
-afirmar(casos.sailco >= 8 && casos.acme >= 4, 'debe haber preguntas claras de Sailco y de Acme');
 
 /* ---------- Resultado ---------- */
 if (errores.length) {
