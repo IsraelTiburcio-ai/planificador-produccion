@@ -25,7 +25,7 @@
 /* Orden FIJO de estaciones de la línea de producción */
 window.ESTACIONES = [
   { car: 'transformacion', corto: 'Transformación', nombre: 'Transformación de productos' },
-  { car: 'restricciones',  corto: 'Restricciones', nombre: 'Se manejan dos restricciones: materia prima y producto' },
+  { car: 'restricciones',  corto: 'Restricciones', nombre: 'Se manejan dos restricciones (materia prima y producto)' },
   { car: 'objetivo',       corto: 'Función objetivo', nombre: 'Función objetivo maximizada' },
   { car: 'proceso',        corto: 'Proceso de transformación', nombre: 'La restricción establece el proceso de transformación' },
   { car: 'planeacion',     corto: 'Caso particular', nombre: 'Caso particular de planeación de producción' }
@@ -177,7 +177,7 @@ window.BANCO = [
       { i: 'box', l: 'Rest. 1', v: 'materia prima' },
       { i: 'bolt', l: 'Rest. 2', v: 'producto' }
     ],
-    pregunta: 'Completa la característica del esquema: "Se manejan dos restricciones: ____".',
+    pregunta: 'Completa la característica del esquema: "Se manejan dos restricciones (____)".',
     opciones: [
       { html: 'Tiempo de cómputo y memoria', ok: false },
       { html: 'Materia prima y producto', ok: true },
@@ -428,10 +428,10 @@ window.BANCO = [
    5 correctas del mapa de la pág. 37 + distractores plausibles de P.L. */
 window.RETO_FINAL = {
   titulo: 'PLANTEAMIENTO DE PROCESO DE PRODUCCIÓN',
-  instrucciones: 'Selecciona las 5 características que corresponden.',
+  instrucciones: 'El cuadro trae exactamente 5: selecciónalas.',
   correctas: [
     'Transformación de productos',
-    'Dos restricciones: materia prima y producto',
+    'Se manejan dos restricciones (materia prima y producto)',
     'Función objetivo maximizada',
     'La restricción establece el proceso de transformación',
     'Caso particular de planeación de producción'
