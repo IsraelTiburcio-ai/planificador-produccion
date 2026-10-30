@@ -54,7 +54,7 @@ const TOTAL_RONDAS = 6; /* 5 estaciones + reto final */
 /* ---------- Audio (sintetizado, sin archivos) ---------- */
 const audio = {
   ctx: null,
-  silencio: localStorage.getItem('pp_sonido') === 'off',
+  silencio: false,
 
   asegurar() {
     if (!this.ctx) {
@@ -126,6 +126,8 @@ const audio = {
   }
 };
 
+try { audio.silencio = localStorage.getItem('pp_sonido') === 'off'; } catch (_) { /* almacenamiento opcional */ }
+
 function sincronizarSonido() {
   const href = audio.silencio ? '#ic-sonido-off' : '#ic-sonido-on';
   const presionado = String(!audio.silencio);
@@ -137,7 +139,7 @@ function sincronizarSonido() {
 
 function alternarSonido() {
   audio.silencio = !audio.silencio;
-  localStorage.setItem('pp_sonido', audio.silencio ? 'off' : 'on');
+  try { localStorage.setItem('pp_sonido', audio.silencio ? 'off' : 'on'); } catch (_) { /* conservar preferencia de sesión */ }
   sincronizarSonido();
   if (!audio.silencio) audio.tap();
 }
