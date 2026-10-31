@@ -5,6 +5,7 @@
    + reto final de memoria. Mecánica: elegir entre 3 alternativas.
    ============================================================ */
 'use strict';
+const optilabResults = window.OptiLabResults?.create('planificador-produccion');
 
 /* ---------- Utilidades ---------- */
 const $ = (sel) => document.querySelector(sel);
@@ -205,6 +206,7 @@ function pintarAlmacen() {
 
 /* ---------- Flujo de partida ---------- */
 function iniciarPartida() {
+  optilabResults?.start();
   estado.rondas = muestrearPartida();
   estado.indice = 0;
   estado.fase = 'estaciones';
@@ -522,6 +524,7 @@ function terminarPartida() {
   estado.corriendo = false;
   clearInterval(estado.reloj);
   const seg = Math.floor((Date.now() - estado.tInicio) / 1000);
+  optilabResults?.complete({reason:'completed',correct:estado.aciertos,total:TOTAL_RONDAS,durationMs:seg*1000,score:estado.puntos});
 
   $('#r-puntos').textContent = estado.puntos;
   $('#r-aciertos').textContent = `${estado.aciertos}/${TOTAL_RONDAS}`;
